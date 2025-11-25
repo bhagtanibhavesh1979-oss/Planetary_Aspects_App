@@ -1,0 +1,47 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet
+          # Install any other requirements
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.x'
+          channel: 'stable'
+
+      - name: Install Flet Build
+        run: pip install flet
+
+      - name: Build APK
+        run: |
+          # Ensure flet is installed and available
+          flet build apk --verbose
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-release
+          path: build/apk/app-release.apk
