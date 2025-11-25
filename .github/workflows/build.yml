@@ -38,12 +38,13 @@ jobs:
       - name: Build APK
         run: |
           # Ensure flet is installed and available
-          flet build apk --verbose --include-packages flet,pyswisseph
+          flet build apk --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: build/apk/app-release.apk
+
 
 
