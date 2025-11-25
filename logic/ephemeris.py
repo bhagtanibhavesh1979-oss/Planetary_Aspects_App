@@ -1,9 +1,37 @@
-import swisseph as swe
+from astropy.time import Time
+from astropy.coordinates import get_body, solar_system_ephemeris, GCRS
+from astropy import units as u
 import datetime
-import os
+import numpy as np
 
-# Set Ephemeris path if needed, otherwise it uses default or built-in
-# swe.set_ephe_path('/path/to/ephe')
+# Use builtin ephemeris (no download needed)
+solar_system_ephemeris.set('builtin')
+
+# Lahiri ayanamsa calculation using exact Drik Panchang values
+def get_ayanamsa(jd):
+    """
+    Calculate Lahiri ayanamsa for a given Julian Day
+    Using exact values from Drik Panchang:
+    - Base: 26° 36' 46.98" at 01-Jan-1900
+    - Precession: 50.278650 seconds/year
+    """
+    # Convert base ayanamsa to decimal degrees
+    # 26° 36' 46.98" = 26 + 36/60 + 46.98/3600
+    base_ayanamsa_deg = 26.0 + 36.0/60.0 + 46.98/3600.0  # ≈ 26.6130500°
+    
+    # Precession rate in degrees per year
+    precession_rate_deg_per_year = 50.278650 / 3600.0  # ≈ 0.01396629°/year
+    
+    # Julian Day for 01-Jan-1900, 00:00 UT
+    jd_1900 = 2415020.5
+    
+    # Years since 1900
+    years_since_1900 = (jd - jd_1900) / 365.25
+    
+    # Calculate current ayanamsa
+    ayanamsa = base_ayanamsa_deg + (years_since_1900 * precession_rate_deg_per_year)
+    
+    return ayanamsa
 
 def get_planetary_positions(dt: datetime.datetime, lat: float = 0.0, lon: float = 0.0):
     """
@@ -11,55 +39,60 @@ def get_planetary_positions(dt: datetime.datetime, lat: float = 0.0, lon: float 
     
     Args:
         dt: datetime object (timezone aware or naive, if naive assumed UTC)
-        lat: Latitude (observer) - not strictly needed for geocentric but good practice
+        lat: Latitude (observer)
         lon: Longitude (observer)
         
     Returns:
         dict: {PlanetName: Degree (0-360)}
     """
     
-    # Set Sidereal Mode to Lahiri
-    swe.set_sid_mode(swe.SIDM_LAHIRI)
-    
-    # Convert to Julian Day (ET)
-    # If dt has timezone, convert to UTC first
+    # Convert to UTC if timezone aware
     if dt.tzinfo:
         dt = dt.astimezone(datetime.timezone.utc)
     
-    jd = swe.julday(dt.year, dt.month, dt.day, dt.hour + dt.minute/60.0 + dt.second/3600.0)
+    # Create Astropy time object
+    t = Time(dt)
     
-    # Planets to calculate
-    # Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu (Mean Node), Ketu (Opposite Node)
-    planets = {
-        "Sun": swe.SUN,
-        "Moon": swe.MOON,
-        "Mars": swe.MARS,
-        "Mercury": swe.MERCURY,
-        "Jupiter": swe.JUPITER,
-        "Venus": swe.VENUS,
-        "Saturn": swe.SATURN,
-        "Rahu": swe.MEAN_NODE
+    # Planet mapping
+    planet_names = {
+        'Sun': 'sun',
+        'Moon': 'moon',
+        'Mercury': 'mercury',
+        'Venus': 'venus',
+        'Mars': 'mars',
+        'Jupiter': 'jupiter',
+        'Saturn': 'saturn',
     }
     
     results = {}
     
-    for name, pid in planets.items():
-        # flags: swe.FLG_SWIEPH | swe.FLG_SIDEREAL
-        # We use geocentric positions
-        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    for name, body in planet_names.items():
+        # Get geocentric position
+        coord = get_body(body, t)
         
-        # xx[0] is longitude
-        xx, ret = swe.calc_ut(jd, pid, flags)
+        # Convert to ecliptic coordinates (tropical)
+        ecliptic_coord = coord.transform_to('geocentricmeanecliptic')
+        tropical_lon = ecliptic_coord.lon.degree
         
-        results[name] = xx[0]
+        # Convert to sidereal using Lahiri ayanamsa
+        jd = t.jd
+        ayanamsa = get_ayanamsa(jd)
+        sidereal_lon = (tropical_lon - ayanamsa) % 360.0
         
-    # Calculate Ketu (Opposite of Rahu)
-    ketu_pos = (results["Rahu"] + 180.0) % 360.0
-    results["Ketu"] = ketu_pos
+        results[name] = sidereal_lon
+    
+    # Calculate Rahu (North Node of Moon)
+    jd = t.jd
+    years_since_2000 = (jd - 2451545.0) / 365.25
+    rahu_mean = (125.04 - years_since_2000 * 19.3) % 360.0
+    results['Rahu'] = rahu_mean
+    
+    # Ketu is opposite to Rahu
+    results['Ketu'] = (rahu_mean + 180.0) % 360.0
     
     return results
 
 def format_degree(deg):
     """Converts decimal degree to DMS string or just rounded."""
-    # For this app, decimal is fine for calculation, maybe string for display
     return f"{deg:.2f}"
+
