@@ -32,6 +32,10 @@ jobs:
           flutter-version: '3.16.x'
           channel: 'stable'
 
+      - name: Accept Android Licenses
+        run: |
+          yes | flutter doctor --android-licenses
+
       - name: Install Flet Build
         run: pip install flet
 
@@ -45,6 +49,7 @@ jobs:
         with:
           name: app-release
           path: build/apk/app-release.apk
+
 
 
 
