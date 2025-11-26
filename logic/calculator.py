@@ -113,3 +113,40 @@ def calculate_aspects(positions: dict, rules: dict = None, orb: float = 3.0, spe
                     break
                     
     return aspects_found
+
+def calculate_planet_summary(aspects: list):
+    """
+    Calculate aspect summary statistics for each planet.
+    
+    Args:
+        aspects: list of aspect dicts from calculate_aspects()
+        
+    Returns:
+        dict: {planet_name: {total, positive, negative, neutral}}
+    """
+    summary = {}
+    
+    # Process each aspect
+    for aspect in aspects:
+        planet1 = aspect["planet1"]
+        planet2 = aspect["planet2"]
+        trend = aspect["trend"]
+        
+        # Initialize planet entries if not exists
+        if planet1 not in summary:
+            summary[planet1] = {"total": 0, "positive": 0, "negative": 0, "neutral": 0}
+        if planet2 not in summary:
+            summary[planet2] = {"total": 0, "positive": 0, "negative": 0, "neutral": 0}
+        
+        # Increment counts for both planets
+        for planet in [planet1, planet2]:
+            summary[planet]["total"] += 1
+            
+            if trend == "Positive":
+                summary[planet]["positive"] += 1
+            elif trend == "Negative":
+                summary[planet]["negative"] += 1
+            elif trend == "Neutral":
+                summary[planet]["neutral"] += 1
+    
+    return summary

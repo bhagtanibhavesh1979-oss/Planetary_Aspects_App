@@ -1,11 +1,13 @@
-from astropy.time import Time
-from astropy.coordinates import get_body, solar_system_ephemeris, GCRS
-from astropy import units as u
+from pymeeus.Sun import Sun
+from pymeeus.Moon import Moon
+from pymeeus.Mercury import Mercury
+from pymeeus.Venus import Venus
+from pymeeus.Mars import Mars
+from pymeeus.Jupiter import Jupiter
+from pymeeus.Saturn import Saturn
+from pymeeus.Epoch import Epoch
+from pymeeus.Coordinates import equatorial2ecliptical, true_obliquity
 import datetime
-import numpy as np
-
-# Use builtin ephemeris (no download needed)
-solar_system_ephemeris.set('builtin')
 
 # Lahiri ayanamsa calculation using exact Drik Panchang values
 def get_ayanamsa(jd):
@@ -16,7 +18,6 @@ def get_ayanamsa(jd):
     - Precession: 50.278650 seconds/year
     """
     # Convert base ayanamsa to decimal degrees
-    # 26° 36' 46.98" = 26 + 36/60 + 46.98/3600
     base_ayanamsa_deg = 26.0 + 36.0/60.0 + 46.98/3600.0  # ≈ 26.6130500°
     
     # Precession rate in degrees per year
@@ -50,39 +51,55 @@ def get_planetary_positions(dt: datetime.datetime, lat: float = 0.0, lon: float 
     if dt.tzinfo:
         dt = dt.astimezone(datetime.timezone.utc)
     
-    # Create Astropy time object
-    t = Time(dt)
+    # Create PyMeeus Epoch object
+    epoch = Epoch(dt.year, dt.month, dt.day + dt.hour/24.0 + dt.minute/1440.0 + dt.second/86400.0)
     
-    # Planet mapping
-    planet_names = {
-        'Sun': 'sun',
-        'Moon': 'moon',
-        'Mercury': 'mercury',
-        'Venus': 'venus',
-        'Mars': 'mars',
-        'Jupiter': 'jupiter',
-        'Saturn': 'saturn',
-    }
+    # Get Julian Day
+    jd = epoch.jde()
+    
+    # Calculate ayanamsa
+    ayanamsa = get_ayanamsa(jd)
+    
+    # Get obliquity of ecliptic for coordinate conversion
+    epsilon = true_obliquity(epoch)
     
     results = {}
     
-    for name, body in planet_names.items():
-        # Get geocentric position
-        coord = get_body(body, t)
-        
-        # Convert to ecliptic coordinates (tropical)
-        ecliptic_coord = coord.transform_to('geocentricmeanecliptic')
-        tropical_lon = ecliptic_coord.lon.degree
-        
-        # Convert to sidereal using Lahiri ayanamsa
-        jd = t.jd
-        ayanamsa = get_ayanamsa(jd)
-        sidereal_lon = (tropical_lon - ayanamsa) % 360.0
-        
-        results[name] = sidereal_lon
+    # Sun - Uses apparent_geocentric_position which returns ecliptical coords
+    sun_lon, sun_lat, sun_dist = Sun.apparent_geocentric_position(epoch)
+    results['Sun'] = (float(sun_lon) - ayanamsa) % 360.0
     
-    # Calculate Rahu (North Node of Moon)
-    jd = t.jd
+    # Moon - Returns 4 values: (lon, lat, dist, parallax) already in ecliptical coords
+    moon_lon, moon_lat, moon_dist, moon_parallax = Moon.apparent_ecliptical_pos(epoch)
+    results['Moon'] = (float(moon_lon) - ayanamsa) % 360.0
+    
+    # Mercury - geocentric_position returns equatorial (RA/Dec), convert to ecliptical
+    ra, dec, dist = Mercury.geocentric_position(epoch)
+    mercury_lon, mercury_lat = equatorial2ecliptical(ra, dec, epsilon)
+    results['Mercury'] = (float(mercury_lon) - ayanamsa) % 360.0
+    
+    # Venus
+    ra, dec, dist = Venus.geocentric_position(epoch)
+    venus_lon, venus_lat = equatorial2ecliptical(ra, dec, epsilon)
+    results['Venus'] = (float(venus_lon) - ayanamsa) % 360.0
+    
+    # Mars
+    ra, dec, dist = Mars.geocentric_position(epoch)
+    mars_lon, mars_lat = equatorial2ecliptical(ra, dec, epsilon)
+    results['Mars'] = (float(mars_lon) - ayanamsa) % 360.0
+    
+    # Jupiter
+    ra, dec, dist = Jupiter.geocentric_position(epoch)
+    jupiter_lon, jupiter_lat = equatorial2ecliptical(ra, dec, epsilon)
+    results['Jupiter'] = (float(jupiter_lon) - ayanamsa) % 360.0
+    
+    # Saturn
+    ra, dec, dist = Saturn.geocentric_position(epoch)
+    saturn_lon, saturn_lat = equatorial2ecliptical(ra, dec, epsilon)
+    results['Saturn'] = (float(saturn_lon) - ayanamsa) % 360.0
+    
+    # Calculate Rahu (North Node of Moon) - Mean Node
+    # Using simplified calculation
     years_since_2000 = (jd - 2451545.0) / 365.25
     rahu_mean = (125.04 - years_since_2000 * 19.3) % 360.0
     results['Rahu'] = rahu_mean
@@ -95,4 +112,3 @@ def get_planetary_positions(dt: datetime.datetime, lat: float = 0.0, lon: float 
 def format_degree(deg):
     """Converts decimal degree to DMS string or just rounded."""
     return f"{deg:.2f}"
-
