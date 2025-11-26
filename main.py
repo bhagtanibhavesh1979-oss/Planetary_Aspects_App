@@ -1,7 +1,7 @@
 import flet as ft
 import datetime
 from logic.ephemeris import get_planetary_positions
-from logic.calculator import calculate_aspects, DEFAULT_ASPECT_RULES
+from logic.calculator import calculate_aspects, calculate_planet_summary, DEFAULT_ASPECT_RULES
 from ui.app_layout import AppLayout
 
 def main(page: ft.Page):
@@ -51,11 +51,15 @@ def main(page: ft.Page):
         else:
             filtered_aspects = aspects
 
-        # 4. Update Tables
+        # 4. Calculate Summary Statistics
+        summary = calculate_planet_summary(filtered_aspects)
+        
+        # 5. Update Tables
         app_layout.positions_table.update_data(positions)
+        app_layout.summary_table.update_data(summary)
         app_layout.aspects_table.update_data(filtered_aspects)
         
-        # 5. Check for Alerts (Simple SnackBar for now)
+        # 6. Check for Alerts (Simple SnackBar for now)
         # Filter for very close aspects (e.g., < 1 deg)
         close_aspects = [a for a in filtered_aspects if a["orb_diff"] < 1.0]
         if close_aspects:
@@ -73,14 +77,26 @@ def main(page: ft.Page):
         default_range_rules=current_range_rules
     )
     
+    # Handle window resizing
+    def page_resize(e):
+        app_layout.resize(page.width)
+        page.update()
+        
+    page.on_resized = page_resize
+    
     # Add Pickers to page overlay
     page.overlay.append(app_layout.settings_sidebar.date_picker)
     page.overlay.append(app_layout.settings_sidebar.time_picker)
     
     page.add(app_layout)
     
+    # Initial resize
+    app_layout.resize(page.width)
+    
     # Initial Calculation
     update_ui(current_orb, current_rules, current_specific_rules, current_range_rules, current_date, current_time, current_planet_filter)
 
 if __name__ == "__main__":
     ft.app(target=main)
+
+
