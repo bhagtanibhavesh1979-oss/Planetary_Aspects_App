@@ -22,9 +22,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet
-          # Install any other requirements
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Install only the exact dependencies we need
+          pip install --no-cache-dir flet>=0.24.0
+          pip install --no-cache-dir pymeeus>=0.5.12
+          # Verify no astropy got pulled in
+          pip list | grep -i astropy && exit 1 || echo "Good: astropy not installed"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -41,7 +43,7 @@ jobs:
 
       - name: Build APK
         run: |
-          # Ensure flet is installed and available
+          # Build with verbose output for debugging
           flet build apk --verbose
 
       - name: Upload APK
@@ -49,6 +51,7 @@ jobs:
         with:
           name: app-release
           path: build/apk/app-release.apk
+
 
 
 
