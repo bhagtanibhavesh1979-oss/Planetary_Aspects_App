@@ -1,3 +1,4 @@
 flet>=0.24.0
-pymeeus>=0.5.12
+pymeeus==0.5.12
+
 
